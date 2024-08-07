@@ -24,8 +24,8 @@
 #include <services/std_svc.h>
 
 #if ENABLE_RUNTIME_INSTRUMENTATION
-PMF_REGISTER_SERVICE_SMC(rt_instr_svc, PMF_RT_INSTR_SVC_ID,
-	RT_INSTR_TOTAL_IDS, PMF_STORE_ENABLE)
+PMF_REGISTER_SERVICE_SMC(rt_instr_svc, PMF_RT_INSTR_SVC_ID, RT_INSTR_TOTAL_IDS,
+                         PMF_STORE_ENABLE)
 #endif
 
 /*******************************************************************************
@@ -51,9 +51,9 @@ static uint32_t next_image_type = NON_SECURE;
 
 #ifdef SUPPORT_UNKNOWN_MPID
 /*
- * Flag to know whether an unsupported MPID has been detected. To avoid having it
- * landing on the .bss section, it is initialized to a non-zero value, this way
- * we avoid potential WAW hazards during system bring up.
+ * Flag to know whether an unsupported MPID has been detected. To avoid having
+ * it landing on the .bss section, it is initialized to a non-zero value, this
+ * way we avoid potential WAW hazards during system bring up.
  * */
 volatile uint32_t unsupported_mpid_flag = 1;
 #endif
@@ -62,52 +62,47 @@ volatile uint32_t unsupported_mpid_flag = 1;
  * Implement the ARM Standard Service function to get arguments for a
  * particular service.
  */
-uintptr_t get_arm_std_svc_args(unsigned int svc_mask)
-{
-	/* Setup the arguments for PSCI Library */
-	DEFINE_STATIC_PSCI_LIB_ARGS_V1(psci_args, bl31_warm_entrypoint);
+uintptr_t get_arm_std_svc_args(unsigned int svc_mask) {
+  /* Setup the arguments for PSCI Library */
+  DEFINE_STATIC_PSCI_LIB_ARGS_V1(psci_args, bl31_warm_entrypoint);
 
-	/* PSCI is the only ARM Standard Service implemented */
-	assert(svc_mask == PSCI_FID_MASK);
+  /* PSCI is the only ARM Standard Service implemented */
+  assert(svc_mask == PSCI_FID_MASK);
 
-	return (uintptr_t)&psci_args;
+  return (uintptr_t)&psci_args;
 }
 
 /*******************************************************************************
  * Simple function to initialise all BL31 helper libraries.
  ******************************************************************************/
-void __init bl31_lib_init(void)
-{
-	cm_init();
-}
+void __init bl31_lib_init(void) { cm_init(); }
 
 /*******************************************************************************
  * Setup function for BL31.
  ******************************************************************************/
 void bl31_setup(u_register_t arg0, u_register_t arg1, u_register_t arg2,
-		u_register_t arg3)
-{
-	/* Perform early platform-specific setup */
-	bl31_early_platform_setup2(arg0, arg1, arg2, arg3);
+                u_register_t arg3) {
+  /* Perform early platform-specific setup */
+  bl31_early_platform_setup2(arg0, arg1, arg2, arg3);
 
-	/* Perform late platform-specific setup */
-	bl31_plat_arch_setup();
+  /* Perform late platform-specific setup */
+  bl31_plat_arch_setup();
 
 #if ENABLE_FEAT_HCX
-	/*
-	 * Assert that FEAT_HCX is supported on this system, without this check
-	 * an exception would occur during context save/restore if enabled but
-	 * not supported.
-	 */
-	assert(is_feat_hcx_present());
+  /*
+   * Assert that FEAT_HCX is supported on this system, without this check
+   * an exception would occur during context save/restore if enabled but
+   * not supported.
+   */
+  assert(is_feat_hcx_present());
 #endif /* ENABLE_FEAT_HCX */
 
 #if CTX_INCLUDE_PAUTH_REGS
-	/*
-	 * Assert that the ARMv8.3-PAuth registers are present or an access
-	 * fault will be triggered when they are being saved or restored.
-	 */
-	assert(is_armv8_3_pauth_present());
+  /*
+   * Assert that the ARMv8.3-PAuth registers are present or an access
+   * fault will be triggered when they are being saved or restored.
+   */
+  assert(is_armv8_3_pauth_present());
 #endif /* CTX_INCLUDE_PAUTH_REGS */
 }
 
@@ -119,92 +114,94 @@ void bl31_setup(u_register_t arg0, u_register_t arg1, u_register_t arg2,
  * switch to the next exception level. When this function returns, the core will
  * switch to the programmed exception level via an ERET.
  ******************************************************************************/
-void bl31_main(void)
-{
-	NOTICE("BL31: %s\n", version_string);
-	NOTICE("BL31: %s\n", build_message);
+void bl31_main(void) {
+  NOTICE("BL31: %s\n", version_string);
+  NOTICE("BL31: %s\n", build_message);
 
 #if FEATURE_DETECTION
-	/* Detect if features enabled during compilation are supported by PE. */
-	detect_arch_features();
+  /* Detect if features enabled during compilation are supported by PE. */
+  detect_arch_features();
 #endif /* FEATURE_DETECTION */
 
 #ifdef SUPPORT_UNKNOWN_MPID
-	if (unsupported_mpid_flag == 0) {
-		NOTICE("Unsupported MPID detected!\n");
-	}
+  if (unsupported_mpid_flag == 0) {
+    NOTICE("Unsupported MPID detected!\n");
+  }
 #endif
 
-	/* Perform platform setup in BL31 */
-	bl31_platform_setup();
+  /* Perform platform setup in BL31 */
+  bl31_platform_setup();
 
-	/* Initialise helper libraries */
-	bl31_lib_init();
+  /* Initialise helper libraries */
+  bl31_lib_init();
 
 #if EL3_EXCEPTION_HANDLING
-	INFO("BL31: Initialising Exception Handling Framework\n");
-	ehf_init();
+  INFO("BL31: Initialising Exception Handling Framework\n");
+  ehf_init();
 #endif
 
-	/* Initialize the runtime services e.g. psci. */
-	INFO("BL31: Initializing runtime services\n");
-	runtime_svc_init();
+  /* Initialize the runtime services e.g. psci. */
+  INFO("BL31: Initializing runtime services\n");
+  runtime_svc_init();
 
-	/*
-	 * All the cold boot actions on the primary cpu are done. We now need to
-	 * decide which is the next image and how to execute it.
-	 * If the SPD runtime service is present, it would want to pass control
-	 * to BL32 first in S-EL1. In that case, SPD would have registered a
-	 * function to initialize bl32 where it takes responsibility of entering
-	 * S-EL1 and returning control back to bl31_main. Similarly, if RME is
-	 * enabled and a function is registered to initialize RMM, control is
-	 * transferred to RMM in R-EL2. After RMM initialization, control is
-	 * returned back to bl31_main. Once this is done we can prepare entry
-	 * into BL33 as normal.
-	 */
+  /*
+   * All the cold boot actions on the primary cpu are done. We now need to
+   * decide which is the next image and how to execute it.
+   * If the SPD runtime service is present, it would want to pass control
+   * to BL32 first in S-EL1. In that case, SPD would have registered a
+   * function to initialize bl32 where it takes responsibility of entering
+   * S-EL1 and returning control back to bl31_main. Similarly, if RME is
+   * enabled and a function is registered to initialize RMM, control is
+   * transferred to RMM in R-EL2. After RMM initialization, control is
+   * returned back to bl31_main. Once this is done we can prepare entry
+   * into BL33 as normal.
+   */
 
-	/*
-	 * If SPD had registered an init hook, invoke it.
-	 */
-	if (bl32_init != NULL) {
-		INFO("BL31: Initializing BL32\n");
+  /*
+   * If SPD had registered an init hook, invoke it.
+   */
+  if (bl32_init != NULL) {
+    INFO("BL31: Initializing BL32\n");
 
-		int32_t rc = (*bl32_init)();
+    int32_t rc = (*bl32_init)();
 
-		if (rc == 0) {
-			WARN("BL31: BL32 initialization failed\n");
-		}
-	}
+    if (rc == 0) {
+      WARN("BL31: BL32 initialization failed\n");
+    }
+  }
 
-	/*
-	 * If RME is enabled and init hook is registered, initialize RMM
-	 * in R-EL2.
-	 */
+  /*
+   * If RME is enabled and init hook is registered, initialize RMM
+   * in R-EL2.
+   */
 #if ENABLE_RME
-	if (rmm_init != NULL) {
-		INFO("BL31: Initializing RMM\n");
+  if (rmm_init != NULL) {
+    INFO("BL31: Initializing RMM\n");
 
-		int32_t rc = (*rmm_init)();
+    int32_t rc = (*rmm_init)();
 
-		if (rc == 0) {
-			WARN("BL31: RMM initialization failed\n");
-		}
-	}
+    if (rc == 0) {
+      WARN("BL31: RMM initialization failed\n");
+    }
+  }
 #endif
 
-	/*
-	 * We are ready to enter the next EL. Prepare entry into the image
-	 * corresponding to the desired security state after the next ERET.
-	 */
-	bl31_prepare_next_image_entry();
+  /*
+   * We are ready to enter the next EL. Prepare entry into the image
+   * corresponding to the desired security state after the next ERET.
+   */
+  bl31_prepare_next_image_entry();
 
-	console_flush();
+  console_flush();
 
-	/*
-	 * Perform any platform specific runtime setup prior to cold boot exit
-	 * from BL31
-	 */
-	bl31_plat_runtime_setup();
+  /*
+   * Perform any platform specific runtime setup prior to cold boot exit
+   * from BL31
+   */
+  bl31_plat_runtime_setup();
+  // Write the registers here
+  volatile uint32_t *myreg = (volatile uint32_t *)(0x44460018);
+  *myreg |= 1 << 6;
 }
 
 /*******************************************************************************
@@ -215,78 +212,67 @@ void bl31_main(void)
  * the same API to program an entry into BL33 once BL32 initialisation is
  * complete.
  ******************************************************************************/
-void bl31_set_next_image_type(uint32_t security_state)
-{
-	assert(sec_state_is_valid(security_state));
-	next_image_type = security_state;
+void bl31_set_next_image_type(uint32_t security_state) {
+  assert(sec_state_is_valid(security_state));
+  next_image_type = security_state;
 }
 
-uint32_t bl31_get_next_image_type(void)
-{
-	return next_image_type;
-}
+uint32_t bl31_get_next_image_type(void) { return next_image_type; }
 
 /*******************************************************************************
  * This function programs EL3 registers and performs other setup to enable entry
  * into the next image after BL31 at the next ERET.
  ******************************************************************************/
-void __init bl31_prepare_next_image_entry(void)
-{
-	entry_point_info_t *next_image_info;
-	uint32_t image_type;
+void __init bl31_prepare_next_image_entry(void) {
+  entry_point_info_t *next_image_info;
+  uint32_t image_type;
 
 #if CTX_INCLUDE_AARCH32_REGS
-	/*
-	 * Ensure that the build flag to save AArch32 system registers in CPU
-	 * context is not set for AArch64-only platforms.
-	 */
-	if (el_implemented(1) == EL_IMPL_A64ONLY) {
-		ERROR("EL1 supports AArch64-only. Please set build flag "
-				"CTX_INCLUDE_AARCH32_REGS = 0\n");
-		panic();
-	}
+  /*
+   * Ensure that the build flag to save AArch32 system registers in CPU
+   * context is not set for AArch64-only platforms.
+   */
+  if (el_implemented(1) == EL_IMPL_A64ONLY) {
+    ERROR("EL1 supports AArch64-only. Please set build flag "
+          "CTX_INCLUDE_AARCH32_REGS = 0\n");
+    panic();
+  }
 #endif
 
-	/* Determine which image to execute next */
-	image_type = bl31_get_next_image_type();
+  /* Determine which image to execute next */
+  image_type = bl31_get_next_image_type();
 
-	/* Program EL3 registers to enable entry into the next EL */
-	next_image_info = bl31_plat_get_next_image_ep_info(image_type);
-	assert(next_image_info != NULL);
-	assert(image_type == GET_SECURITY_STATE(next_image_info->h.attr));
+  /* Program EL3 registers to enable entry into the next EL */
+  next_image_info = bl31_plat_get_next_image_ep_info(image_type);
+  assert(next_image_info != NULL);
+  assert(image_type == GET_SECURITY_STATE(next_image_info->h.attr));
 
-	INFO("BL31: Preparing for EL3 exit to %s world\n",
-		(image_type == SECURE) ? "secure" : "normal");
-	print_entry_point_info(next_image_info);
-	cm_init_my_context(next_image_info);
+  INFO("BL31: Preparing for EL3 exit to %s world\n",
+       (image_type == SECURE) ? "secure" : "normal");
+  print_entry_point_info(next_image_info);
+  cm_init_my_context(next_image_info);
 
-	/*
-	* If we are entering the Non-secure world, use
-	* 'cm_prepare_el3_exit_ns' to exit.
-	*/
-	if (image_type == NON_SECURE) {
-		cm_prepare_el3_exit_ns();
-	} else {
-		cm_prepare_el3_exit(image_type);
-	}
+  /*
+   * If we are entering the Non-secure world, use
+   * 'cm_prepare_el3_exit_ns' to exit.
+   */
+  if (image_type == NON_SECURE) {
+    cm_prepare_el3_exit_ns();
+  } else {
+    cm_prepare_el3_exit(image_type);
+  }
 }
 
 /*******************************************************************************
  * This function initializes the pointer to BL32 init function. This is expected
  * to be called by the SPD after it finishes all its initialization
  ******************************************************************************/
-void bl31_register_bl32_init(int32_t (*func)(void))
-{
-	bl32_init = func;
-}
+void bl31_register_bl32_init(int32_t (*func)(void)) { bl32_init = func; }
 
 #if ENABLE_RME
 /*******************************************************************************
  * This function initializes the pointer to RMM init function. This is expected
  * to be called by the RMMD after it finishes all its initialization
  ******************************************************************************/
-void bl31_register_rmm_init(int32_t (*func)(void))
-{
-	rmm_init = func;
-}
+void bl31_register_rmm_init(int32_t (*func)(void)) { rmm_init = func; }
 #endif
